@@ -101,7 +101,7 @@
 
 
 // change this to make the song slower or faster
-int tempo = 108;
+int tempo = 85;
 
 // change this to whichever pin you want to use
 int buzzer = 9;
@@ -112,12 +112,10 @@ int buzzer = 9;
 // so -4 means a dotted quarter note, that is, a quarter plus an eighteenth!!
 int melody[] = {
   
-  NOTE_CS5, 8, NOTE_D5, 8, NOTE_CS5, 8, NOTE_D5, 8, NOTE_AS4, 8, NOTE_G4, -4,
-  NOTE_AS4, 8, NOTE_G4, -4,                         NOTE_D5, 8, NOTE_G4, -4,
-  NOTE_CS5, 8, NOTE_D5, 8, NOTE_CS5, 8, NOTE_D5, 8, NOTE_AS4, 8, NOTE_G4, -4,
-  NOTE_AS4, 8, NOTE_G4, -4,                         NOTE_D5, 8, NOTE_G4, -4,
-  
-  NOTE_A4, 8, NOTE_AS4, 8, NOTE_A4, 8, NOTE_AS4, 8, NOTE_G4, 8, 
+  NOTE_AS4, 16, NOTE_GS4, 16, NOTE_F4, 16, NOTE_B4, 32, NOTE_AS4, 32,
+  NOTE_GS4, 16, NOTE_F4, 16, NOTE_DS4, 16, NOTE_C4, 16, NOTE_AS3, 16,
+  NOTE_GS3, 16, NOTE_F3, 16, NOTE_GS3, 16, NOTE_AS3, 16, NOTE_B3, 16,
+  NOTE_C4, 16, NOTE_DS4, 16, NOTE_E4, 16, NOTE_E4, 32, NOTE_F4, -4
 
 };
 
