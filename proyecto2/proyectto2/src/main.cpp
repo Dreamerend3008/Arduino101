@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Servo.h>
+#include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
@@ -8,37 +9,25 @@
 #define OLED_RESET -1
 #define DIRECCION_OLED 0x3c
 
-Adafruit_SSD1306 oled(
-  ANCHO_PANTALLA, ALTO_PANTALLA, &Wire, OLED_RESET
-);
+Adafruit_SSD1306 oled(ANCHO_PANTALLA, ALTO_PANTALLA, &Wire, OLED_RESET);
 
-// pins entrada
-int p_pulsador = 2 , p_infrarojo = 4, p_luz=3, p_temp=5;
+// Pines (Corregidos a A3 y A5 para que no haya ambigüedad)
+int p_pulsador = 2, p_infrarojo = 4, p_luz = A3, p_temp = A5;
+int p_servo = 6, p_motor = 9, p_buzzer = 10;
 
-// pins salida
-int p_servo = 6, p_motor=9,p_buzzer=10;
-
-// entradas
+// Variables
 bool pulsador;
-bool infrarojo; // puede cambiar a float
+bool infrarojo; 
+bool pulsador_ant = false;
+bool infrarojo_ant = false;
 float luz;
 float temp;
 
-// salidas
-int angulo_servo;
-float pot_motor;
-float buzzer;
-
-// variables de estado
 int personas = 0;
-int estado_lab = 0; // 0 normal 1 elevado 2 lleno
-int umbral_luz=0, umbral_temp=0;
+int umbral_luz = 0, umbral_temp = 0;
 int velocidad_motor = 0;
-int maxVelocidad = 1275;
-bool infrarojo_ant = false;
+int maxVelocidad = 1275; // Aunque analogWrite llega maximo a 255
 
-
-// Classes
 Servo servo;
 
 void debug(int time){
@@ -57,58 +46,121 @@ void debug(int time){
   delay(time);
 }
 
+
 String INFO() {
   String s = "";
-  s += "Personas lab: "; 
-  s += String(personas, HEX);
-  s += '\n';
-  s += "Capacidad max: ";
-  s += String(15);
-  s += '\n';
+  s += "Personas: "; s += String(personas); s += "/15\n";
+  
+  // Línea 2: Estado
   s += "Estado: ";
-  if(personas <= 5) s += "Normal";
-  else if (personas >= 13) s += "Lleno";
-  else s += "Elevado";
-  s += '\n';
-  s += "Temperatura: ";
-  s += String(temp);
-  s += '\n';
-  s += "Luz: ";
-  s += String(luz);
-  s += '\n';
-  s += "Ventilacion: ";
-  s += String(velocidad_motor);
-  s += '\n';
-  // falta formas con base al estado
+  if(personas <= 5) s += "Normal\n";
+  else if (personas >= 13) s += "Lleno\n";
+  else s += "Elevado\n";
+  
+  // Línea 3: Sensores
+  s += "T:"; s += String((int)temp); 
+  s += " L:"; s += String((int)luz); 
+  s += " V:"; s += String(map(velocidad_motor, 0, maxVelocidad, 0, 100)); s += "%\n";
+  
   return s;
 }
 
 void musica1(){
-  digitalWrite(p_buzzer, HIGH);
-  delay(5);
-  digitalWrite(p_buzzer, LOW);
+  // among us esta muy aguda
+  tone(p_buzzer, 1046); 
+  delay(250);
+  tone(p_buzzer, 1244); 
+  delay(250); 
+  tone(p_buzzer, 1400); 
+  delay(250); 
+  tone(p_buzzer, 1510); 
+  delay(250);
+  tone(p_buzzer, 1400); 
+  delay(250);
+  tone(p_buzzer, 1244); 
+  delay(250); 
+  tone(p_buzzer, 1046); 
+  delay(250); 
+  noTone(p_buzzer); 
+  delay(500); 
+  tone(p_buzzer, 932); 
+  delay(125);
+  tone(p_buzzer, 1174); 
+  delay(125); 
+  tone(p_buzzer, 1046); 
+  delay(250);
+  // end of first
+  noTone(p_buzzer); 
+  delay(500); 
+  tone(p_buzzer, 780); 
+  delay(250); 
+  tone(p_buzzer, 525); 
+  delay(250); 
+  noTone(p_buzzer); 
+  delay(250);
+  //secont part
+  tone(p_buzzer, 1046); 
+  delay(250);
+  tone(p_buzzer, 1244); 
+  delay(250); 
+  tone(p_buzzer, 1400); 
+  delay(250); 
+  tone(p_buzzer, 1510); 
+  delay(250);
+  tone(p_buzzer, 1400); 
+  delay(250);
+  tone(p_buzzer, 1244); 
+  delay(250);
+  tone(p_buzzer, 1400); 
+  delay(250);
+  noTone(p_buzzer); 
+  delay(750);
+  //fast part
+  tone(p_buzzer, 1510); 
+  delay(125);
+  tone(p_buzzer, 1400); 
+  delay(125);
+  tone(p_buzzer, 1244); 
+  delay(125);
+  tone(p_buzzer, 1510); 
+  delay(125);
+  tone(p_buzzer, 1400); 
+  delay(125);
+  tone(p_buzzer, 1244); 
+  delay(125);
+  tone(p_buzzer, 1510); 
+  delay(125);
+  tone(p_buzzer, 1400); 
+  delay(125);
+  tone(p_buzzer, 1244); 
+  delay(125);
+  tone(p_buzzer, 1510); 
+  delay(125);
+  tone(p_buzzer, 1400); 
+  delay(125);
+  tone(p_buzzer, 1244); 
+  delay(125);
+  tone(p_buzzer, 1510); 
+  delay(125);
+  noTone(p_buzzer); 
+  delay(500);
 }
 
 void musica2(){
-  digitalWrite(p_buzzer, HIGH);
-  delay(1000);
-  digitalWrite(p_buzzer, LOW);
+  digitalWrite(p_buzzer, HIGH); delay(1000); digitalWrite(p_buzzer, LOW);
 }
 
 void mostrarMensaje_ALERTA(String mensaje){
-  oled.fillRect(8, 16, 112, 32, SSD1306_BLACK); 
-  oled.fillRect(10, 18, 108, 28, SSD1306_WHITE); 
-  
+  oled.fillRect(0, 41, 128, 10, SSD1306_WHITE); 
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_BLACK); 
-  
-  oled.setCursor(46, 21);
-  oled.print("ALERTA"); 
-  
-  oled.setCursor(14, 33); 
+  int posicionX = (128 - (mensaje.length() * 6)) / 2;
+  if (posicionX < 0) posicionX = 0; // Evitar que se salga por la izquierda
+  oled.setCursor(posicionX, 42); 
   oled.print(mensaje);   
-  
-  // Actualizamos la pantalla para que aparezca la ventana
+  oled.display();
+  delay(500); 
+  oled.fillRect(0, 41, 128, 10, SSD1306_BLACK);
   oled.display();
 }
 
@@ -118,110 +170,91 @@ void mostrarMensaje_INFO(String mensaje) {
   oled.setTextColor(SSD1306_BLACK, SSD1306_WHITE); 
   oled.setCursor(0, 0);
   oled.println("   INFO LABORATORIO   "); 
+  
   oled.setTextColor(SSD1306_WHITE); 
   oled.setCursor(0, 16); 
   oled.print(mensaje);   
 
-  // Barra vacia 
+  // Barra de progreso
   oled.drawRect(14, 52, 100, 8, SSD1306_WHITE); 
   int anchoBarra = map(personas, 0, 15, 0, 96); 
-
-  // Rellenamos la barra por dentro (dejando 2 píxeles de margen)
+  if(anchoBarra > 96) anchoBarra = 96;
   oled.fillRect(16, 54, anchoBarra, 4, SSD1306_WHITE);
   oled.display();
 }
 
 void abrirPuerta(){
-  servo.write(180);  // Move to 90 degrees
+  servo.write(180); 
   delay(3000);
-  servo.write(90); // Move to 180 degrees
+  servo.write(90); 
 }
 
 void encenderVentilador(int velocidad){
-  analogWrite(p_motor, map(velocidad, 0, maxVelocidad, 0, 255));
+  int velocidad_PWM = map(velocidad, 0, maxVelocidad, 0, 255);
+  // Evitamos pasarnos del límite de PWM de Arduino (0 a 255)
+  if(velocidad_PWM > 255) velocidad_PWM = 255;
+  if(velocidad_PWM < 0) velocidad_PWM = 0;
+  
+  analogWrite(p_motor, velocidad_PWM);
 } 
 
 void setup() {
   Serial.begin(9600);
-
-  // pulsador
   pinMode(p_pulsador, INPUT_PULLUP);
-  // infrarojo
-  pinMode(p_infrarojo, INPUT_PULLUP); // tomamos por ahora el infrarojo como un boton
-  // Luz
+  pinMode(p_infrarojo, INPUT_PULLUP); 
   pinMode(p_luz, INPUT);
-  // Temperatura
   pinMode(p_temp, INPUT);
-
-  // Buzzer
   pinMode(p_buzzer, OUTPUT);
-  // Servo
-  servo.attach(p_servo);
-  // motor
   pinMode(p_motor, OUTPUT);
+  
+  servo.attach(p_servo);
+  servo.write(90); 
 
-  // Setup de pantalla
   if(!oled.begin(SSD1306_SWITCHCAPVCC, DIRECCION_OLED)){
     while(true) {}
   }
 }
 
 void loop() {
-  // definicion de entradas
+  pulsador = (digitalRead(p_pulsador) == LOW);
+  infrarojo = (digitalRead(p_infrarojo) == LOW);
 
-  //pulsador
-  if(digitalRead(p_pulsador) == LOW)pulsador=true;
-  else pulsador = false;
+  luz = map(analogRead(p_luz), 0, 1023, 0, 255);
+  temp = map(analogRead(p_temp), 0, 1023, 0, 255);
 
-  // Infrarojo
-  if(digitalRead(p_infrarojo) == LOW)infrarojo=true;
-  else infrarojo= false;
-  infrarojo = !infrarojo;
-
-  // Luz
-  luz = analogRead(p_luz);
-  luz = map(luz, 0, 1023, 0, 255);
-
-  // temperatura
-  temp = analogRead(p_temp);
-  temp = map(temp, 0, 1023, 0, 255);
-
-  // funcionamiento
-
-  // ingreso
-  if(pulsador && personas < 15){
-    musica1();
-    abrirPuerta();
-    personas++;
-    mostrarMensaje_ALERTA("Entrada registrada");
-  }else if(pulsador && personas == 15){
-    // laboratorio lleno
-    musica2();
-    mostrarMensaje_ALERTA("Laboratorio lleno");
+  // INGRESO: Agregado el control de flanco (!pulsador_ant)
+  if(pulsador && !pulsador_ant){
+    if(personas < 15){
+      personas++;
+      mostrarMensaje_ALERTA("Entrada reg.");
+      musica1();
+      abrirPuerta();
+    } else {
+      musica2();
+      mostrarMensaje_ALERTA("Lab. Lleno!");
+    }
   }
 
-  // Salida 
+  // SALIDA 
   if(infrarojo && personas > 0 && !infrarojo_ant){
-    mostrarMensaje_ALERTA("Salida registrada");
     personas--;
+    mostrarMensaje_ALERTA("Salida reg.");
   }
 
-  // Ventilador
-  if(personas > 7 || luz  > umbral_luz || temp > umbral_temp){
-    // funcion para calcular la velocidad 
-    // f(n,l,t) = (n/15) * (luz+temp)
-    // personas 0 -> 15
-    // luz 0 -> 255 
-    // temp 0 -> 255
-    velocidad_motor = (personas/15)*(luz+temp) + 3*temp;
-  }else{
+  // VENTILADOR: Arreglada la división usando float
+  if(personas > 7 || luz > umbral_luz || temp > umbral_temp){
+    float proporcion_personas = (float)personas / 15.0; // Ahora sí dará 0.33, 0.5, etc.
+    velocidad_motor = (proporcion_personas * (luz + temp)) + (3 * temp);
+  } else {
     velocidad_motor = 0;
   }
   encenderVentilador(velocidad_motor);
 
-  // pantalla debe siempre mostrar personas presentes, capacidad, estado del lab
   mostrarMensaje_INFO(INFO());
 
+  // Guardar estado anterior de los botones para que no sume de a 10 personas por segundo
+  pulsador_ant = pulsador;
   infrarojo_ant = infrarojo;
-  delay(1000);
+  
+  debug(500); // Reducido a 50ms para que la detección de botones sea fluida
 }
