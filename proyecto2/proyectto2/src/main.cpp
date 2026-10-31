@@ -27,7 +27,7 @@ int leds[3] = {0,0,0};
 String estado = "Normal";
 
 int personas = 12;
-int umbral_luz = 0, umbral_temp = 0;
+int umbral_luz = 178, umbral_temp = 17;
 int velocidad_motor = 0;
 int maxVelocidad = 8415; 
 
