@@ -11,8 +11,6 @@
 
 Adafruit_SSD1306 oled(ANCHO_PANTALLA, ALTO_PANTALLA, &Wire, OLED_RESET);
 
-//harry
-
 // Pines 
 int p_pulsador = 2, p_infrarojo = 4, p_luz = A5, p_temp = A0;
 int p_leds[3] = {9,5,3};
@@ -35,7 +33,6 @@ int maxVelocidad = 8415;
 
 Servo servo;
 
-// pedro
 void debug(int time){
   Serial.print("l_pulsador: ");
   if(pulsador)Serial.println("True");
@@ -54,7 +51,6 @@ void debug(int time){
   delay(time);
 }
 
-// juampa
 void actualizar_estado(){
   if (personas <= 5) estado = "Normal";
   else if (personas >= 13) estado = "Lleno";
@@ -264,12 +260,14 @@ void mostrarMensaje_INFO() {
 }
 
 void abrirPuerta(){
+  // Mueve el servo espera 3 segundos y vuelve a la posicion inicial
   servo.write(180); 
   delay(3000);
   servo.write(90); 
 }
 
 void encenderVentilador(int velocidad){
+  // Enciende el ventilador con la velocidad proporcional a la variable "velocidad"
   int velocidad_PWM = map(velocidad, 0, maxVelocidad, 67, 255);
   if(velocidad_PWM > 255) velocidad_PWM = 255;
   if(velocidad_PWM < 0) velocidad_PWM = 0;
@@ -277,17 +275,19 @@ void encenderVentilador(int velocidad){
 } 
 
 void setup() {
+  // Setup inicial
   Serial.begin(9600);
   pinMode(p_pulsador, INPUT_PULLUP);
   pinMode(p_infrarojo, INPUT_PULLUP); 
-  //pinMode(p_luz, INPUT);
   pinMode(p_temp, INPUT);
   pinMode(p_buzzer, OUTPUT);
   pinMode(p_motor, OUTPUT);
   
+  // Inicializar Servo
   servo.attach(p_servo);
   servo.write(90); 
 
+  // Inicializar pantalla OLED
   if(!oled.begin(SSD1306_SWITCHCAPVCC, DIRECCION_OLED)){
     while(true) {}
   }
@@ -299,7 +299,7 @@ void loop() {
   luz = map(analogRead(p_luz), 0, 1023, 0, 255);
   temp = map(analogRead(p_temp), 0, 1023, 0, 255);
   
-  // INGRESO: Agregado el control de flanco (!pulsador_ant)
+  // INGRESO
   if(pulsador && !pulsador_ant){
     if(personas < 15){
       personas++;
@@ -312,13 +312,13 @@ void loop() {
     }
   }
 
-  // SALIDA 
+  // Salida
   if(infrarojo && personas > 0 && !infrarojo_ant){
     personas--;
     mostrarMensaje_ALERTA("Salida reg.");
   }
 
-  // VENTILADOR: Arreglada la división usando float
+  // Ventilador
   if(personas > 7 || luz > umbral_luz || temp > umbral_temp){
     velocidad_motor = (personas * (luz + temp)) + (3 * temp);
   } else {
@@ -334,9 +334,9 @@ void loop() {
   for(int i=0;i<3;i++)analogWrite(p_leds[i], leds[i]);
   mostrarMensaje_INFO();
 
-  // Guardar estado anterior de los botones para que no sume de a 10 personas por segundo
+  // Guardar estado anterior de los botones para que no cuente varias veces 
   pulsador_ant = pulsador;
   infrarojo_ant = infrarojo;
   
-  debug(100); // Reducido a 50ms para que la detección de botones sea fluida
+  debug(100); 
 }
