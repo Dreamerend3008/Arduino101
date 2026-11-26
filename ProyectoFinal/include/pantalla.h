@@ -1,0 +1,244 @@
+#pragma once
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define ANCHO_PANTALLA 128
+#define ALTO_PANTALLA 64
+#define OLED_RESET -1
+#define DIRECCION_OLED 0x3C
+
+Adafruit_SSD1306 oled(ANCHO_PANTALLA, ALTO_PANTALLA, &Wire, OLED_RESET);
+bool oled_ok = false;
+int  cara_forzada = -1; // -1 = automático, 0..6 = prueba manual de caras
+
+enum EstadoCara {
+  CARA_FELIZ = 0,
+  CARA_TRISTE,
+  CARA_ENOJADO,
+  CARA_DORMIDO,
+  CARA_HAMBRE,
+  CARA_SED,
+  CARA_EJERCICIO
+};
+
+inline bool iniciar_pantalla() {
+  oled_ok = oled.begin(SSD1306_SWITCHCAPVCC, DIRECCION_OLED);
+  return oled_ok;
+}
+
+inline void mostrarMensaje_INFO(int luz, int humedad, float temp, bool pulsador,
+                                bool mpu_valido, float ax, float ay,
+                                bool bomba_activa, const String& bt_msg) {
+  if (!oled_ok) return;
+  oled.clearDisplay();
+  oled.setTextSize(1);
+
+  oled.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
+  oled.setCursor(0, 0);
+  oled.println("   TEST TAMAGOTCHI   ");
+
+  oled.setTextColor(SSD1306_WHITE);
+
+  oled.setCursor(0, 16);
+  oled.print("L:"); oled.print(luz); oled.print("% ");
+  oled.print("H:"); oled.print(humedad); oled.print("% ");
+  oled.print("T:"); oled.print((int)temp); oled.println("C");
+
+  oled.setCursor(0, 26);
+  oled.print("Btn:"); oled.print(pulsador ? "1" : "0");
+  oled.print(" MPU:");
+  if (mpu_valido) {
+    oled.print(ax, 1); oled.print(","); oled.println(ay, 1);
+  } else {
+    oled.println("ERR");
+  }
+
+  oled.setCursor(0, 36);
+  oled.print("Bomba:"); oled.print(bomba_activa ? "ON " : "OFF ");
+  oled.print("BT:"); oled.println(bt_msg.length() ? bt_msg : "-");
+
+  oled.drawRect(14, 52, 100, 8, SSD1306_WHITE);
+  int anchoBarra = constrain(map(humedad, 0, 100, 0, 96), 0, 96);
+  oled.fillRect(16, 54, anchoBarra, 4, SSD1306_WHITE);
+
+  oled.display();
+}
+
+// ponytail: primitivas Adafruit_GFX en vez de bitmaps PROGMEM; usar bitmaps si se quiere pixel art complejo
+inline void dibujar_arco(int cx, int cy, int rx, int ry, bool hacia_abajo) {
+  for (int dx = -rx; dx <= rx; dx++) {
+    float t = (float)dx / rx;
+    int dy = (int)roundf(ry * (1.0f - t * t));
+    int y = hacia_abajo ? (cy + dy) : (cy - dy);
+    oled.drawPixel(cx + dx, y, SSD1306_WHITE);
+    oled.drawPixel(cx + dx, y + 1, SSD1306_WHITE);
+  }
+}
+
+inline void dibujar_ojo(int x, int y, bool cerrado) {
+  if (cerrado) {
+    oled.fillRect(x - 7, y, 15, 2, SSD1306_WHITE);
+    return;
+  }
+  oled.fillCircle(x, y, 7, SSD1306_WHITE);
+  oled.fillCircle(x + 2, y - 2, 2, SSD1306_BLACK);
+}
+
+inline void dibujar_etiqueta_cara(const char* texto) {
+  int x = (ANCHO_PANTALLA - (int)strlen(texto) * 6) / 2;
+  oled.setTextSize(1);
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setCursor(x, 55);
+  oled.print(texto);
+}
+
+inline void dibujar_cara_feliz(bool anim) {
+  static int paso_parpadeo = 0;
+  paso_parpadeo = (paso_parpadeo + 1) % 6;
+  bool parpadeo = (paso_parpadeo == 0);
+  dibujar_ojo(44, 21, parpadeo);
+  dibujar_ojo(84, 21, parpadeo);
+  oled.fillRoundRect(25, 29, 8, 4, 2, SSD1306_WHITE);
+  oled.fillRoundRect(95, 29, 8, 4, 2, SSD1306_WHITE);
+  dibujar_arco(64, 35, 14, anim ? 8 : 7, true);
+  dibujar_etiqueta_cara("FELIZ");
+}
+
+inline void dibujar_cara_triste(bool anim) {
+  dibujar_ojo(44, 23, false);
+  dibujar_ojo(84, 23, false);
+  oled.drawLine(34, 13, 50, 9, SSD1306_WHITE);
+  oled.drawLine(34, 14, 50, 10, SSD1306_WHITE);
+  oled.drawLine(78, 9, 94, 13, SSD1306_WHITE);
+  oled.drawLine(78, 10, 94, 14, SSD1306_WHITE);
+  int ly = anim ? 35 : 32;
+  oled.fillCircle(37, ly, 2, SSD1306_WHITE);
+  oled.drawPixel(37, ly - 3, SSD1306_WHITE);
+  dibujar_arco(64, 44, 11, 5, false);
+  dibujar_etiqueta_cara("TRISTE");
+}
+
+inline void dibujar_cara_enojado(bool anim) {
+  dibujar_ojo(44, 23, false);
+  dibujar_ojo(84, 23, false);
+  oled.fillTriangle(34, 12, 54, 12, 54, 21, SSD1306_BLACK);
+  oled.fillTriangle(74, 12, 94, 12, 74, 21, SSD1306_BLACK);
+  oled.drawLine(34, 12, 53, 19, SSD1306_WHITE);
+  oled.drawLine(34, 13, 53, 20, SSD1306_WHITE);
+  oled.drawLine(94, 12, 75, 19, SSD1306_WHITE);
+  oled.drawLine(94, 13, 75, 20, SSD1306_WHITE);
+  for (int i = 0; i < 4; i++) {
+    int x0 = 50 + i * 7;
+    oled.drawLine(x0, (i % 2 == 0) ? 41 : 37, x0 + 7, (i % 2 == 0) ? 37 : 41, SSD1306_WHITE);
+  }
+  int vx = 108, vy = anim ? 11 : 12;
+  oled.drawLine(vx - 3, vy - 3, vx - 1, vy - 1, SSD1306_WHITE);
+  oled.drawLine(vx + 3, vy - 3, vx + 1, vy - 1, SSD1306_WHITE);
+  oled.drawLine(vx - 3, vy + 3, vx - 1, vy + 1, SSD1306_WHITE);
+  oled.drawLine(vx + 3, vy + 3, vx + 1, vy + 1, SSD1306_WHITE);
+  dibujar_etiqueta_cara("ENOJADO");
+}
+
+inline void dibujar_cara_dormido(bool anim) {
+  dibujar_arco(44, 23, 8, 3, true);
+  dibujar_arco(84, 23, 8, 3, true);
+  oled.drawCircle(64, 39, anim ? 4 : 3, SSD1306_WHITE);
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setTextSize(1);
+  oled.setCursor(100, anim ? 15 : 17); oled.print("z");
+  oled.setCursor(109, anim ? 6 : 8);   oled.print("Z");
+  dibujar_etiqueta_cara("DORMIDO");
+}
+
+inline void dibujar_cara_hambre(bool anim) {
+  dibujar_ojo(44, 20, false);
+  dibujar_ojo(84, 20, false);
+  int h = anim ? 13 : 10;
+  oled.drawRoundRect(52, 34, 24, h, 5, SSD1306_WHITE);
+  oled.fillRoundRect(57, 34 + h - 4, 14, 3, 1, SSD1306_WHITE);
+  oled.drawFastVLine(74, 34 + h, anim ? 4 : 2, SSD1306_WHITE);
+  oled.fillCircle(110, 17, 5, SSD1306_WHITE);
+  oled.drawLine(110, 11, 113, 8, SSD1306_WHITE);
+  dibujar_etiqueta_cara("HAMBRE");
+}
+
+inline void dibujar_cara_sed(bool anim) {
+  dibujar_ojo(44, 22, false);
+  dibujar_ojo(84, 22, false);
+  oled.fillRect(36, 14, 17, 6, SSD1306_BLACK);
+  oled.fillRect(76, 14, 17, 6, SSD1306_BLACK);
+  oled.drawFastHLine(36, 20, 17, SSD1306_WHITE);
+  oled.drawFastHLine(76, 20, 17, SSD1306_WHITE);
+  oled.drawRoundRect(54, 34, 20, 8, 3, SSD1306_WHITE);
+  oled.fillRoundRect(60, 40, 8, anim ? 7 : 5, 3, SSD1306_WHITE);
+  int gy = anim ? 17 : 13;
+  oled.fillTriangle(110, gy - 6, 106, gy, 114, gy, SSD1306_WHITE);
+  oled.fillCircle(110, gy + 1, 4, SSD1306_WHITE);
+  dibujar_etiqueta_cara("SED");
+}
+
+inline void dibujar_cara_ejercicio(bool anim) {
+  oled.fillRect(28, 6, 72, 4, SSD1306_WHITE);
+  oled.drawLine(100, 7, 106, anim ? 5 : 9, SSD1306_WHITE);
+  oled.drawLine(100, 9, 105, anim ? 11 : 13, SSD1306_WHITE);
+  dibujar_ojo(44, 22, false);
+  dibujar_ojo(84, 22, false);
+  oled.drawLine(36, 13, 51, 15, SSD1306_WHITE);
+  oled.drawLine(92, 13, 77, 15, SSD1306_WHITE);
+  oled.drawFastHLine(52, 36, 24, SSD1306_WHITE);
+  dibujar_arco(64, 36, 12, 7, true);
+  int dy = anim ? 16 : 22;
+  oled.fillRect(104, dy - 4, 3, 9, SSD1306_WHITE);
+  oled.fillRect(117, dy - 4, 3, 9, SSD1306_WHITE);
+  oled.drawFastHLine(107, dy, 10, SSD1306_WHITE);
+  oled.drawFastHLine(107, dy + 1, 10, SSD1306_WHITE);
+  dibujar_etiqueta_cara("EJERCICIO");
+}
+
+inline EstadoCara obtener_estado_cara(bool esta_durmiendo, int alimentacion,
+                                      int hidratacion, int energia,
+                                      int actividad_fisica) {
+  if (esta_durmiendo) return CARA_DORMIDO;
+
+  int criticas = (alimentacion < 20) + (hidratacion < 20) + (energia < 20) + (actividad_fisica < 20);
+  if (criticas >= 2)         return CARA_ENOJADO;
+  if (alimentacion < 20)     return CARA_HAMBRE;
+  if (hidratacion < 20)      return CARA_SED;
+  if (actividad_fisica < 20) return CARA_EJERCICIO;
+  if (energia < 35 || alimentacion < 40 || hidratacion < 40 || actividad_fisica < 40) return CARA_TRISTE;
+  return CARA_FELIZ;
+}
+
+inline void mostrar_cara(EstadoCara estado, bool anim) {
+  if (!oled_ok) return;
+  oled.clearDisplay();
+  switch (estado) {
+    case CARA_FELIZ:     dibujar_cara_feliz(anim);     break;
+    case CARA_TRISTE:    dibujar_cara_triste(anim);    break;
+    case CARA_ENOJADO:   dibujar_cara_enojado(anim);   break;
+    case CARA_DORMIDO:   dibujar_cara_dormido(anim);   break;
+    case CARA_HAMBRE:    dibujar_cara_hambre(anim);    break;
+    case CARA_SED:       dibujar_cara_sed(anim);       break;
+    case CARA_EJERCICIO: dibujar_cara_ejercicio(anim); break;
+  }
+  oled.display();
+}
+
+inline void actualizar_cara(bool esta_durmiendo, int alimentacion,
+                            int hidratacion, int energia,
+                            int actividad_fisica,
+                            int cada_ciclos = 4) {
+  static int ciclos = 4; // dibuja en el primer ciclo
+  static bool anim = false;
+  ciclos++;
+  if (ciclos < cada_ciclos) return;
+  ciclos = 0;
+  anim = !anim;
+
+  EstadoCara estado = (cara_forzada >= 0)
+    ? (EstadoCara)cara_forzada
+    : obtener_estado_cara(esta_durmiendo, alimentacion, hidratacion, energia, actividad_fisica);
+  mostrar_cara(estado, anim);
+}

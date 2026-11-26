@@ -1,16 +1,11 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <BluetoothSerial.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include "pantalla.h"
+#include "cancion.h"
 
-#define ANCHO_PANTALLA 128
-#define ALTO_PANTALLA 64
-#define OLED_RESET -1
-#define DIRECCION_OLED 0x3C
 #define DIRECCION_MPU 0x68
 
-Adafruit_SSD1306 oled(ANCHO_PANTALLA, ALTO_PANTALLA, &Wire, OLED_RESET);
 BluetoothSerial SerialBT;
 
 // Pines verificados para ESP32 DevKit V1 de 30 pines.
@@ -63,11 +58,9 @@ String bt_msg = "";
 
 int   leds[3] = {0, 0, 0};
 bool  bomba_activa = false;
-bool  oled_ok = false;
 bool  mpu_ok  = false;
 bool  mpu_valido = false;
 bool  debug_activo = true;
-unsigned long ultimo_debug = 0;
 
 // giroscopio y acelerómetro MPU6050
 bool mpu_init() {
@@ -95,12 +88,12 @@ bool leer_mpu() {
   gx = read16() / 131.0f;
   gy = read16() / 131.0f;
   gz = read16() / 131.0f;
-  magnitud_acelerometro_raw = sqrt(ax * ax + ay * ay + az * az);
+  magnitud_acelerometro_raw = fabs(sqrt(ax * ax + ay * ay + az * az) - 1.0f);
   magnitud_gyroscopio_raw = sqrt(gx * gx + gy * gy + gz * gz);
   magnitud_total_raw = sqrt(magnitud_acelerometro_raw * magnitud_acelerometro_raw + magnitud_gyroscopio_raw * magnitud_gyroscopio_raw);
-  magnitud_acelerometro = map(magnitud_acelerometro_raw, MAGNITUD_ACELEROMETRO_MIN, MAGNITUD_ACELEROMETRO_MAX, 0, 100);
-  magnitud_gyroscopio = map(magnitud_gyroscopio_raw, MAGNITUD_GYROSCOPIO_MIN, MAGNITUD_GYROSCOPIO_MAX, 0, 100);
-  magnitud_total = map(magnitud_total_raw, MAGNITUD_TOTAL_MIN, MAGNITUD_TOTAL_MAX, 0, 100);
+  magnitud_acelerometro = constrain((magnitud_acelerometro_raw - MAGNITUD_ACELEROMETRO_MIN) * 100.0f / (MAGNITUD_ACELEROMETRO_MAX - MAGNITUD_ACELEROMETRO_MIN), 0.0f, 100.0f);
+  magnitud_gyroscopio   = constrain((magnitud_gyroscopio_raw - MAGNITUD_GYROSCOPIO_MIN) * 100.0f / (MAGNITUD_GYROSCOPIO_MAX - MAGNITUD_GYROSCOPIO_MIN), 0.0f, 100.0f);
+  magnitud_total        = constrain((magnitud_total_raw - MAGNITUD_TOTAL_MIN) * 100.0f / (MAGNITUD_TOTAL_MAX - MAGNITUD_TOTAL_MIN), 0.0f, 100.0f);
   return true;
 }
 
@@ -153,52 +146,13 @@ void enviar_bt(String mensaje) {
   SerialBT.println(mensaje);
 }
 
-void mostrarMensaje_INFO() {
-  if (!oled_ok) return;
-  oled.clearDisplay();
-  oled.setTextSize(1);
-
-  // Título
-  oled.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-  oled.setCursor(0, 0);
-  oled.println("   TEST TAMAGOTCHI   ");
-
-  oled.setTextColor(SSD1306_WHITE);
-
-  // Línea 1: Sensores analógicos
-  oled.setCursor(0, 16);
-  oled.print("L:"); oled.print(luz); oled.print("% ");
-  oled.print("H:"); oled.print(humedad); oled.print("% ");
-  oled.print("T:"); oled.print((int)temp); oled.println("C");
-
-  // Línea 2: Digitales (pulsador + MPU)
-  oled.setCursor(0, 26);
-  oled.print("Btn:"); oled.print(pulsador ? "1" : "0");
-  oled.print(" MPU:");
-  if (mpu_valido) {
-    oled.print(ax, 1); oled.print(","); oled.println(ay, 1);
-  } else {
-    oled.println("ERR");
-  }
-
-  // Línea 3: Bluetooth / Bomba
-  oled.setCursor(0, 36);
-  oled.print("Bomba:"); oled.print(bomba_activa ? "ON " : "OFF ");
-  oled.print("BT:"); oled.println(bt_msg.length() ? bt_msg : "-");
-
-  // Barra de progreso (humedad 0..100%)
-  oled.drawRect(14, 52, 100, 8, SSD1306_WHITE);
-  int anchoBarra = map(humedad, 0, 100, 0, 96);
-  anchoBarra = constrain(anchoBarra, 0, 96);
-  oled.fillRect(16, 54, anchoBarra, 4, SSD1306_WHITE);
-
-  oled.display();
-}
-
-// Debug
-void debug(int intervalo_ms) {
-  if (!debug_activo || millis() - ultimo_debug < (unsigned long)intervalo_ms) return;
-  ultimo_debug = millis();
+// Debug (cada N ciclos del loop; con delay(100), 10 ciclos = 1 segundo)
+void debug(int cada_ciclos = 10) {
+  static int ciclos = 0;
+  if (!debug_activo) return;
+  ciclos++;
+  if (ciclos < cada_ciclos) return;
+  ciclos = 0;
 
   Serial.print("l_pulsador: "); Serial.println(pulsador ? "True" : "False");
   Serial.print("l_luz: ");      Serial.print(luz);     Serial.print("% (raw "); Serial.print(luz_raw);     Serial.println(")");
@@ -226,6 +180,7 @@ void imprimir_ayuda() {
   Serial.println(F("r/g/b/0 : LED RGB Rojo / Verde / Azul / Apagado"));
   Serial.println(F("z : probar zumbador"));
   Serial.println(F("o : actualizar OLED (INFO)"));
+  Serial.println(F("c : probar caras del tamagotchi (auto / 0..6)"));
   Serial.println(F("t : enviar PING por Bluetooth"));
   Serial.println(F("h : mostrar ayuda\n"));
 }
@@ -243,7 +198,14 @@ void procesar_comandos_serial() {
     case 'b': actualizar_leds(0, 0, 255);   Serial.println("RGB: AZUL"); break;
     case '0': actualizar_leds(0, 0, 0);     Serial.println("RGB: OFF"); break;
     case 'z': sonar_buzzer(1000, 250);      Serial.println("Buzzer: beep"); break;
-    case 'o': mostrarMensaje_INFO();        Serial.println(oled_ok ? "OLED: INFO" : "OLED: no detectada"); break;
+    case 'o':
+      mostrarMensaje_INFO(luz, humedad, temp, pulsador, mpu_valido, ax, ay, bomba_activa, bt_msg);
+      Serial.println(oled_ok ? "OLED: INFO" : "OLED: no detectada");
+      break;
+    case 'c':
+      cara_forzada = (cara_forzada >= 6) ? -1 : cara_forzada + 1;
+      Serial.print("Cara: "); Serial.println(cara_forzada < 0 ? "AUTO" : String(cara_forzada));
+      break;
     case 't': enviar_bt("PING_TAMAGOTCHI"); Serial.println("BT: PING enviado"); break;
     case 'h': imprimir_ayuda(); break;
     default:  break;
@@ -264,12 +226,12 @@ void setup() {
   actualizar_leds(0, 0, 0);
 
   Wire.begin(p_sda, p_scl);
-  oled_ok = oled.begin(SSD1306_SWITCHCAPVCC, DIRECCION_OLED);
+  oled_ok = iniciar_pantalla();
   mpu_ok  = mpu_init();
 
   Serial.print("OLED: "); Serial.println(oled_ok ? "OK" : "ERR");
   Serial.print("MPU:  "); Serial.println(mpu_ok  ? "OK" : "ERR");
-  mostrarMensaje_INFO();
+  mostrarMensaje_INFO(luz, humedad, temp, pulsador, mpu_valido, ax, ay, bomba_activa, bt_msg);
   imprimir_ayuda();
 }
 
@@ -284,15 +246,23 @@ Indicador de Actividad fisica
 */
 
 // Variables de estado del tamagotchi
-int hidratacion = 100; // Estimulo -> Beber agua
-int alimentacion = 100; // Estimulo -> Comer
-int energia = 100; // Estimulo -> Dormir
-int actividad_fisica = 100; // Estimulo -> Ejercicio
+int hidratacion = 75; // Estimulo -> Beber agua
+int alimentacion = 75; // Estimulo -> Comer
+int energia = 75; // Estimulo -> Dormir
+int actividad_fisica = 75; // Estimulo -> Ejercicio
 
 bool esta_durmiendo = false; // Estado de sueño
 bool esta_ejercitandose = false; // Estado de ejercicio
 bool ya_orino = false; // Para controlar que solo orine una vez por ciclo
 bool ya_canto = false;
+
+// Banderas para enviar avisos BT solo cuando cambia el estado
+bool tiene_sed_ant = false;
+bool tiene_hambre_ant = false;
+bool esta_cansado_ant = false;
+bool mucha_energia_ant = false;
+bool necesita_ejercicio_ant = false;
+bool hidratacion_llena_ant = false;
 
 void comer(){
   if(alimentacion < 100){
@@ -308,52 +278,92 @@ void tomar_agua(){
   if(hidratacion < 100){
     hidratacion += random(min(humedad, 20), max(humedad, 40));
     if(hidratacion > 100) hidratacion = 100;
+    hidratacion_llena_ant = false;
     enviar_bt("Bebiendo agua... Hidratacion: " + String(hidratacion));
-  } else {
+  } else if (!hidratacion_llena_ant) {
+    hidratacion_llena_ant = true;
     enviar_bt("Hidratacion completa");
   }
 }
 
 void cantar(){
   enviar_bt("Cantando... Energia: " + String(energia));
+  reproducir_cancion(p_buzzer);
 }
 
 void actualizar_variables_estado(){
-  // Disminuir hidratacion con el tiempo
-  if(hidratacion > 0){
-    hidratacion -= random(1,3);
-    if(temp > 30) hidratacion -= random(1,2); // Si hace calor, se deshidrata mas rapido
-    if(hidratacion < 0) hidratacion = 0;
+  // Con delay(100) en loop(), 20 ciclos = ~2 segundos entre cada actualización
+  static int ciclos = 0;
+  ciclos++;
+  if (ciclos < 20) return;
+  ciclos = 0;
+
+  // Disminuir variables con el tiempo (random(1, 3) devuelve 1 o 2)
+  hidratacion -= random(1, 4);
+  if (temp > 30) hidratacion -= random(1, 3); // Si hace calor, se deshidrata mas rapido
+  alimentacion -= random(1, 3);
+  energia -= random(1, 3);
+  actividad_fisica -= random(1, 3);
+
+  // Si el tamagochi esta durmiendo, aumenta la energia; si esta ejercitandose, aumenta la actividad fisica
+  if (esta_durmiendo) {
+    energia += random(5, 11);
+    alimentacion -= random(1, 3);
+  } else if (esta_ejercitandose) {
+    actividad_fisica += random(20, 41);
+    hidratacion -= random(1, 3);
   }
 
-  // Disminuir alimentacion con el tiempo
-  if(alimentacion > 0){
-    alimentacion -= random(1,2);
-    if(alimentacion < 0) alimentacion = 0;
-  }
+  hidratacion      = constrain(hidratacion, 0, 100);
+  alimentacion     = constrain(alimentacion, 0, 100);
+  energia          = constrain(energia, 0, 100);
+  actividad_fisica = constrain(actividad_fisica, 0, 100);
+}
 
-  // Disminuir energia con el tiempo
-  if(energia > 0){
-    energia -= random(1,2);
-    if(energia < 0) energia = 0;
+void reaccionar_estado() {
+  bool tiene_sed = (hidratacion < 20);
+  if (tiene_sed && !tiene_sed_ant) {
+    enviar_bt("El tamagochi tiene sed");
+    ya_orino = false;
+  } else if (hidratacion > 90 && !ya_orino) {
+    enviar_bt("El tamagochi necesita ir al baño");
+    controlar_bomba(true);
+    delay(3000);
+    controlar_bomba(false);
+    ya_orino = true;
   }
+  tiene_sed_ant = tiene_sed;
 
-  // Disminuir actividad fisica con el tiempo
-  if(actividad_fisica > 0){
-    actividad_fisica -= random(1,2);
-    if(actividad_fisica < 0) actividad_fisica = 0;
+  bool tiene_hambre = (alimentacion < 20);
+  if (tiene_hambre && !tiene_hambre_ant) {
+    enviar_bt("El tamagochi tiene hambre");
+    actualizar_leds(255, 0, 0); // Rojo
+    ya_canto = false;
+  } else if (alimentacion > 90 && !ya_canto) {
+    enviar_bt("El tamagochi esta feliz y canta");
+    cantar();
+    ya_canto = true;
   }
+  tiene_hambre_ant = tiene_hambre;
 
-  // Si el tamagochi esta durmiendo, aumenta la energia, si esta ejercitandose, aumenta la actividad fisica
-  if(esta_durmiendo){
-    energia += random(5,10);
-    alimentacion -= random(1,2); // Si esta durmiendo, disminuye la alimentacion
-    if(energia > 100) energia = 100;
-  }else if(esta_ejercitandose){
-    actividad_fisica += random(20,40);
-    hidratacion -= random(1,2); // Si esta ejercitandose, disminuye la hidratacion
-    if(actividad_fisica > 100) actividad_fisica = 100;
+  bool esta_cansado = (energia < 20);
+  bool mucha_energia = (energia > 90);
+  if (esta_cansado && !esta_cansado_ant) {
+    enviar_bt("El tamagochi esta cansado");
+    actualizar_leds(0, 0, 0); // Apagados
+  } else if (mucha_energia && !mucha_energia_ant) {
+    enviar_bt("El tamagochi esta con mucha energia");
+    actualizar_leds(0, 255, 0); // Verde
   }
+  esta_cansado_ant = esta_cansado;
+  mucha_energia_ant = mucha_energia;
+
+  bool necesita_ejercicio = (actividad_fisica < 20);
+  if (necesita_ejercicio && !necesita_ejercicio_ant) {
+    enviar_bt("El tamagochi necesita hacer ejercicio");
+    actualizar_leds(0, 0, 255); // Azul
+  }
+  necesita_ejercicio_ant = necesita_ejercicio;
 }
 
 void loop() {
@@ -390,45 +400,12 @@ void loop() {
   }
 
   actualizar_variables_estado();
-
-  // Acciones del tamagochi con base en sus variables de estado
-  if(hidratacion < 20){
-    enviar_bt("El tamagochi tiene sed");
-    ya_orino = false; // Reiniciar la variable para que pueda orinar nuevamente
-  }else if(hidratacion > 90 && !ya_orino){
-    enviar_bt("El tamagochi necesita ir al baño");
-    controlar_bomba(true);
-    delay(3000);
-    controlar_bomba(false);
-    ya_orino = true; // Para que solo orine una vez por ciclo
-  }
-
-  if(alimentacion < 20){
-    enviar_bt("El tamagochi tiene hambre");
-    actualizar_leds(255, 0, 0); // Rojo
-    ya_canto = false; // Reiniciar la variable para que pueda cantar nuevamente
-  }else if(alimentacion > 90 && !ya_canto){
-    enviar_bt("El tamagochi esta feliz y canta");
-    cantar();
-    ya_canto = true; // Para que solo cante una vez por ciclo
-  }
-
-  if(energia < 20){
-    enviar_bt("El tamagochi esta cansado");
-    actualizar_leds(0, 0, 0); // Apagados
-  }else if(energia > 90){
-    enviar_bt("El tamagochi esta con mucha energia");
-    actualizar_leds(0, 255, 0); // Verde
-  }
-
-  if(actividad_fisica < 20){
-    enviar_bt("El tamagochi necesita hacer ejercicio");
-    actualizar_leds(0, 0, 255); // Azul
-  }
-
+  reaccionar_estado();
+  actualizar_cara(esta_durmiendo, alimentacion, hidratacion, energia, actividad_fisica);
   procesar_comandos_serial();
-  debug(1000);
+  debug(10);
 
   // Guardar estado anterior del pulsador
   pulsador_ant = pulsador;
+  delay(100); // 10 ciclos por segundo + antirrebote del pulsador
 }
