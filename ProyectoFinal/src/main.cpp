@@ -180,7 +180,7 @@ void imprimir_ayuda() {
   Serial.println(F("r/g/b/0 : LED RGB Rojo / Verde / Azul / Apagado"));
   Serial.println(F("z : probar zumbador"));
   Serial.println(F("o : actualizar OLED (INFO)"));
-  Serial.println(F("c : probar caras del tamagotchi (auto / 0..6)"));
+  Serial.println(F("c : probar caras del tamagotchi (auto / 0..7)"));
   Serial.println(F("t : enviar PING por Bluetooth"));
   Serial.println(F("h : mostrar ayuda\n"));
 }
@@ -203,7 +203,7 @@ void procesar_comandos_serial() {
       Serial.println(oled_ok ? "OLED: INFO" : "OLED: no detectada");
       break;
     case 'c':
-      cara_forzada = (cara_forzada >= 6) ? -1 : cara_forzada + 1;
+      cara_forzada = (cara_forzada >= 7) ? -1 : cara_forzada + 1;
       Serial.print("Cara: "); Serial.println(cara_forzada < 0 ? "AUTO" : String(cara_forzada));
       break;
     case 't': enviar_bt("PING_TAMAGOTCHI"); Serial.println("BT: PING enviado"); break;
@@ -269,6 +269,7 @@ void comer(){
     alimentacion += random(20,60);
     if(alimentacion > 100) alimentacion = 100;
     enviar_bt("Comiendo... Alimentacion: " + String(alimentacion));
+    animar_comiendo();
   } else {
     enviar_bt("Alimentacion completa");
   }
@@ -280,6 +281,7 @@ void tomar_agua(){
     if(hidratacion > 100) hidratacion = 100;
     hidratacion_llena_ant = false;
     enviar_bt("Bebiendo agua... Hidratacion: " + String(hidratacion));
+    animar_tomando_agua();
   } else if (!hidratacion_llena_ant) {
     hidratacion_llena_ant = true;
     enviar_bt("Hidratacion completa");
@@ -401,7 +403,7 @@ void loop() {
 
   actualizar_variables_estado();
   reaccionar_estado();
-  actualizar_cara(esta_durmiendo, alimentacion, hidratacion, energia, actividad_fisica);
+  actualizar_cara(esta_durmiendo, esta_ejercitandose, alimentacion, hidratacion, energia, actividad_fisica);
   procesar_comandos_serial();
   debug(10);
 
