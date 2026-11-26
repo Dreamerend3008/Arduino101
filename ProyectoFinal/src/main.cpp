@@ -282,7 +282,6 @@ Indicador de Actividad fisica
 
 */
 
-
 // Variables de estado del tamagotchi
 int hidratacion = 100; // Estimulo -> Beber agua
 int alimentacion = 100; // Estimulo -> Comer
@@ -291,14 +290,16 @@ int actividad_fisica = 100; // Estimulo -> Ejercicio
 
 bool esta_durmiendo = false; // Estado de sueño
 bool esta_ejercitandose = false; // Estado de ejercicio
+bool ya_orino = false; // Para controlar que solo orine una vez por ciclo
+bool ya_canto = false;
 
 void comer(){
   if(alimentacion < 100){
     alimentacion += random(20,60);
     if(alimentacion > 100) alimentacion = 100;
-    Serial.println("Comiendo... Alimentacion: " + String(alimentacion));
+    enviar_bt("Comiendo... Alimentacion: " + String(alimentacion));
   } else {
-    Serial.println("Alimentacion completa");
+    enviar_bt("Alimentacion completa");
   }
 }
 
@@ -306,9 +307,51 @@ void tomar_agua(){
   if(hidratacion < 100){
     hidratacion += random(min(humedad, 20), max(humedad, 40));
     if(hidratacion > 100) hidratacion = 100;
-    Serial.println("Bebiendo agua... Hidratacion: " + String(hidratacion));
+    enviar_bt("Bebiendo agua... Hidratacion: " + String(hidratacion));
   } else {
-    Serial.println("Hidratacion completa");
+    enviar_bt("Hidratacion completa");
+  }
+}
+
+void cantar(){
+  enviar_bt("Cantando... Energia: " + String(energia));
+}
+
+void actualizar_variables_estado(){
+  // Disminuir hidratacion con el tiempo
+  if(hidratacion > 0){
+    hidratacion -= random(1,3);
+    if(temp > 30) hidratacion -= random(1,2); // Si hace calor, se deshidrata mas rapido
+    if(hidratacion < 0) hidratacion = 0;
+  }
+
+  // Disminuir alimentacion con el tiempo
+  if(alimentacion > 0){
+    alimentacion -= random(1,2);
+    if(alimentacion < 0) alimentacion = 0;
+  }
+
+  // Disminuir energia con el tiempo
+  if(energia > 0){
+    energia -= random(1,2);
+    if(energia < 0) energia = 0;
+  }
+
+  // Disminuir actividad fisica con el tiempo
+  if(actividad_fisica > 0){
+    actividad_fisica -= random(1,2);
+    if(actividad_fisica < 0) actividad_fisica = 0;
+  }
+
+  // Si el tamagochi esta durmiendo, aumenta la energia, si esta ejercitandose, aumenta la actividad fisica
+  if(esta_durmiendo){
+    energia += random(5,10);
+    alimentacion -= random(1,2); // Si esta durmiendo, disminuye la alimentacion
+    if(energia > 100) energia = 100;
+  }else if(esta_ejercitandose){
+    actividad_fisica += random(20,40);
+    hidratacion -= random(1,2); // Si esta ejercitandose, disminuye la hidratacion
+    if(actividad_fisica > 100) actividad_fisica = 100;
   }
 }
 
@@ -328,7 +371,7 @@ void loop() {
   }
 
   // Si la luz es baja o la energia es baja y el tamagochi no esta durmiendo, entonces entra en estado de sueño
-  if((luz < 20 || energia < 20) && !esta_durmiendo){
+  if((luz < 20 || energia < 20) && !esta_durmiendo && !esta_ejercitandose){
     esta_durmiendo = true;
   }else if(esta_durmiendo){
     if(luz > 50 || esta_ejercitandose || pulsador || humedad > 50){
@@ -336,12 +379,50 @@ void loop() {
     }
   }
 
-  if(magnitud_total > 50 && !esta_ejercitandose){
+  // Ejercicio
+  if(magnitud_total > 50 && !esta_ejercitandose && !esta_durmiendo){
     esta_ejercitandose = true;
   }else if(esta_ejercitandose){
     if(magnitud_total < 20){
       esta_ejercitandose = false;
     }
+  }
+
+  actualizar_variables_estado();
+
+  // Acciones del tamagochi con base en sus variables de estado
+  if(hidratacion < 20){
+    enviar_bt("El tamagochi tiene sed");
+    ya_orino = false; // Reiniciar la variable para que pueda orinar nuevamente
+  }else if(hidratacion > 90 && !ya_orino){
+    enviar_bt("El tamagochi necesita ir al baño");
+    controlar_bomba(true);
+    delay(3000);
+    controlar_bomba(false);
+    ya_orino = true; // Para que solo orine una vez por ciclo
+  }
+
+  if(alimentacion < 20){
+    enviar_bt("El tamagochi tiene hambre");
+    actualizar_leds(255, 0, 0); // Rojo
+    ya_canto = false; // Reiniciar la variable para que pueda cantar nuevamente
+  }else if(alimentacion > 90 && !ya_canto){
+    enviar_bt("El tamagochi esta feliz y canta");
+    cantar();
+    ya_canto = true; // Para que solo cante una vez por ciclo
+  }
+
+  if(energia < 20){
+    enviar_bt("El tamagochi esta cansado");
+    actualizar_leds(0, 0, 0); // Apagados
+  }else if(energia > 90){
+    enviar_bt("El tamagochi esta con mucha energia");
+    actualizar_leds(0, 255, 0); // Verde
+  }
+
+  if(actividad_fisica < 20){
+    enviar_bt("El tamagochi necesita hacer ejercicio");
+    actualizar_leds(0, 0, 255); // Azul
   }
 
   procesar_comandos_serial();
