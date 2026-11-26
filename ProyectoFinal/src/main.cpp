@@ -13,19 +13,20 @@
 Adafruit_SSD1306 oled(ANCHO_PANTALLA, ALTO_PANTALLA, &Wire, OLED_RESET);
 BluetoothSerial SerialBT;
 
-// De acuerdo con la ia son buenos pines para la sp 
-int p_luz      = 34; // LDR 
-int p_humedad  = 35; // Sensor de humedad
-int p_temp     = 32; // Sensor de temperatura 
+// Pines verificados para ESP32 DevKit V1 de 30 pines.
+// Usar los números GPIO impresos en la placa, no la posición física del pin.
+const uint8_t p_luz      = 34; // ADC1, solo entrada
+const uint8_t p_humedad  = 35; // ADC1, solo entrada
+const uint8_t p_temp     = 32; // ADC1
 
-int p_pulsador = 14; // Pulsador a GND 
-int p_sda      = 21; 
-int p_scl      = 22;
+const uint8_t p_pulsador = 14; // Pulsador a GND
+const uint8_t p_sda      = 21;
+const uint8_t p_scl      = 22;
 
 // Salidas
-int p_leds[3]  = {26, 18, 19}; // {R, G, B}
-int p_bomba    = 27;           // Minibomba vía transistor/relé + diodo
-int p_buzzer   = 25;           // Zumbador
+const uint8_t p_leds[3]  = {26, 18, 19}; // {R, G, B}, LED de cátodo común
+const uint8_t p_bomba    = 27;           // Solo señal al transistor/MOSFET
+const uint8_t p_buzzer   = 25;
 
 // Constantes para calibrar
 const char* BT_NOMBRE        = "Tamagotchi_ESP32";

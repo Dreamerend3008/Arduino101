@@ -1,52 +1,88 @@
-# Guía ESP32 y pruebas de circuito
+# Guía de conexión — ESP32 DevKit V1 (30 pines)
 
-## 1. Diferencias clave frente a Arduino Uno
+## 1. Placa usada
 
-- **GPIOs a 3.3 V:** nunca conectar 5 V directos a un pin de entrada.
-- **ADC de 12 bits (`0..4095`):** usar solo pines **ADC1 (`32, 33, 34, 35, 36, 39`)** porque el Bluetooth interno deshabilita ADC2.
-- **Pines solo entrada (`34, 35, 36, 39`):** no sirven como salida ni tienen `INPUT_PULLUP`.
-- **Pines reservados:** evitar `6..11` (flash) y `0, 2, 12, 15` (arranque).
-- **I2C:** `GPIO 21` (SDA) y `GPIO 22` (SCL), compartidos entre OLED y MPU6050.
-- **Bluetooth:** integrado (`BluetoothSerial.h`), sin módulo externo.
-- **Monitor Serial:** `115200` baudios. Si PlatformIO se queda en `Connecting...` al subir, mantener pulsado **BOOT** 2 s hasta que inicie la carga.
+Este proyecto usa una **DOIT ESP32 DevKit V1 de 30 pines**, normalmente equipada con un módulo **ESP-WROOM-32**.
 
-## 2. Conexiones (`src/main.cpp`)
+PlatformIO ya está configurado así:
 
-Unir todos los **GND** entre sí (ESP32, sensores y fuente externa de la bomba).
+```ini
+[env:esp32doit-devkit-v1]
+platform = espressif32
+board = esp32doit-devkit-v1
+framework = arduino
+monitor_speed = 115200
+```
 
-| Componente | Pin ESP32 | Alimentación / Notas |
-| :--- | :--- | :--- |
-| **LDR (luz)** | `34` | `3V3` y `GND` |
-| **Sensor humedad** | `35` | `3V3` y `GND` |
-| **Sensor temp. (LM35/TMP36)** | `32` | `3V3` y `GND` (`TEMP_OFFSET_MV = 0` LM35, `500` TMP36) |
-| **Pulsador** | `14` | Entre `GPIO 14` y `GND` (`INPUT_PULLUP` interno) |
-| **OLED SSD1306 (`0x3C`)** | `21` (SDA), `22` (SCL) | `3V3` y `GND` |
-| **MPU6050 (`0x68`)** | `21` (SDA), `22` (SCL) | `3V3`, `GND`, `AD0` libre o a `GND` |
-| **Minibomba** | `27` | Vía transistor/relé + **diodo 1N4007 en antiparalelo** + fuente externa 5 V |
-| **Zumbador** | `25` | `+` a `GPIO 25`, `-` a `GND` |
-| **LED RGB** | `26` (R), `18` (G), `19` (B) | Resistencia 220–330 Ω por color; común a `GND` |
-| **Bluetooth** | *(interno)* | Sin cables (`Tamagotchi_ESP32`) |
+> Al cablear, seguir la etiqueta **GPIO** impresa junto al pin (por ejemplo, `34`, `G34` o `GPIO34`), no contar posiciones desde una esquina. Algunos fabricantes cambian la orientación de las etiquetas.
 
-## 3. Probar el Bluetooth interno
+## 2. Pines verificados
 
-1. Sube `src/main.cpp` y abre el Monitor Serial a `115200`.
-2. En un celular **Android**, ve a *Ajustes → Bluetooth* y empareja **`Tamagotchi_ESP32`** (iOS no soporta Bluetooth Classic SPP).
-3. Abre la app **Serial Bluetooth Terminal** → *Devices* → pestaña **Bluetooth Classic** → selecciona `Tamagotchi_ESP32`.
-4. **Celular → ESP32:** envía `HOLA` desde la app; en el Monitor Serial debe salir `l_bt: HOLA`.
-5. **ESP32 → Celular:** escribe **`t`** + Enter en el Monitor Serial; en el celular debe llegar `PING_TAMAGOTCHI`.
+Todos los GPIO usados están expuestos en el modelo de **30 pines** y evitan los pines de la memoria flash y los pines delicados de arranque.
 
-*(Si no aparece, pulsa **EN/RST** en la ESP32. Si se reinicia al conectar, cambia a un cable/puerto USB con más corriente.)*
+| Función | GPIO | Etiqueta habitual | Motivo / restricción |
+| :--- | :---: | :---: | :--- |
+| LDR | `34` | `34` | ADC1; solo entrada; sin `INPUT_PULLUP` |
+| Humedad | `35` | `35` | ADC1; solo entrada; sin `INPUT_PULLUP` |
+| Temperatura | `32` | `32` | ADC1 |
+| Pulsador | `14` | `14` | Entrada con `INPUT_PULLUP` |
+| I2C SDA | `21` | `21` | Bus compartido OLED/MPU6050 |
+| I2C SCL | `22` | `22` | Bus compartido OLED/MPU6050 |
+| Bomba (control) | `27` | `27` | Salida al transistor/MOSFET, nunca a la bomba directamente |
+| Zumbador | `25` | `25` | Salida |
+| LED rojo | `26` | `26` | PWM |
+| LED verde | `18` | `18` | PWM |
+| LED azul | `19` | `19` | PWM |
 
-## 4. Comandos de prueba en Monitor Serial (`115200`)
+No cambiar las entradas analógicas a GPIO de **ADC2**: Bluetooth/Wi-Fi puede impedir sus lecturas. No usar `GPIO 6..11` porque están conectados a la memoria flash. Conviene evitar `0`, `2`, `12` y `15` porque intervienen en el arranque.
+
+## 3. Cableado
+
+Unir todos los **GND**: ESP32, sensores y fuente externa de la bomba.
+
+| Componente | Conexión |
+| :--- | :--- |
+| **LDR** | Hacer un divisor: `3V3 → LDR → GPIO34 → resistencia de 10 kΩ → GND`. No conectar una LDR sola entre `3V3` y `GND`. |
+| **Sensor de humedad** | `AO → GPIO35`, `VCC → 3V3`, `GND → GND`. Usar la salida analógica `AO`, no `DO`. |
+| **LM35 o TMP36** | `OUT → GPIO32`, `VCC → 3V3`, `GND → GND`. En el código usar `TEMP_OFFSET_MV = 0` para LM35 o `500` para TMP36. Revisar el orden de patas de la versión comprada. |
+| **Pulsador** | Un terminal a `GPIO14` y el otro a `GND`; no necesita resistencia externa. |
+| **OLED SSD1306 I2C** | `SDA → GPIO21`, `SCL → GPIO22`, `VCC → 3V3`, `GND → GND`; dirección esperada `0x3C`. |
+| **MPU6050** | `SDA → GPIO21`, `SCL → GPIO22`, `VCC → 3V3`, `GND → GND`, `AD0 → GND`; dirección esperada `0x68`. |
+| **Minibomba 5 V** | `GPIO27 → resistencia/base o gate del transistor/MOSFET`. Alimentar la bomba con fuente externa de 5 V y poner un diodo 1N4007 en antiparalelo: cátodo al positivo. **No alimentar ni manejar la bomba desde un GPIO.** |
+| **Zumbador** | Zumbador pequeño de 3.3 V: `+ → GPIO25`, `- → GND`. Si consume más de 12 mA, usar transistor. |
+| **LED RGB de cátodo común** | R, G y B a `GPIO26`, `GPIO18` y `GPIO19`, cada color con resistencia de 220–330 Ω; pata común a `GND`. El código no está invertido para ánodo común. |
+| **Bluetooth** | Es interno; no conectar un módulo Bluetooth externo. Nombre: `Tamagotchi_ESP32`. |
+
+Los GPIO trabajan a **3.3 V** y no toleran 5 V en sus entradas.
+
+## 4. Carga y monitor serie
+
+1. Conectar la placa por un cable USB que transmita datos.
+2. En PlatformIO ejecutar **Upload**.
+3. Abrir el monitor a `115200` baudios.
+4. Si aparece `Connecting...`, mantener pulsado **BOOT**, soltarlo cuando empiece la escritura y luego pulsar **EN** si la placa no reinicia sola.
+
+Si hay más de un puerto, configurar temporalmente `upload_port` y `monitor_port` en `platformio.ini`; no hace falta agregarlos normalmente.
+
+## 5. Prueba de Bluetooth
+
+1. Subir `src/main.cpp`.
+2. En Android, emparejar `Tamagotchi_ESP32` y abrir una terminal **Bluetooth Classic SPP**.
+3. Enviar `HOLA`; el monitor debe mostrar `l_bt: HOLA`.
+4. Escribir `t` en el monitor; el celular debe recibir `PING_TAMAGOTCHI`.
+
+Bluetooth Classic SPP no funciona directamente con iOS. Esta guía corresponde al ESP32 clásico con ESP-WROOM-32, no a variantes C3, S2 o S3.
+
+## 6. Comandos de prueba
 
 | Tecla | Prueba |
 | :---: | :--- |
-| `d` | Activa / desactiva lecturas periódicas de sensores |
-| `p` | Enciende / apaga minibomba (si trabaja invertida, `BOMBA_ACTIVA_HIGH = false`) |
-| `r` / `g` / `b` / `0` | LED RGB Rojo / Verde / Azul / Apagado |
-| `z` | Pitido en el zumbador |
-| `o` | Actualiza la OLED (`mostrarMensaje_INFO`) |
-| `t` | Envía `PING_TAMAGOTCHI` por Bluetooth |
-| `h` | Muestra ayuda |
+| `d` | Activa/desactiva las lecturas periódicas |
+| `p` | Enciende/apaga la bomba |
+| `r`, `g`, `b`, `0` | LED rojo, verde, azul o apagado |
+| `z` | Prueba el zumbador |
+| `o` | Actualiza la OLED |
+| `t` | Envía un mensaje por Bluetooth |
+| `h` | Muestra la ayuda |
 
-Al probar luz y humedad, anota los valores `raw` mínimo/máximo reales y ajústalos en `LUZ_MIN_RAW`, `LUZ_MAX_RAW`, `HUM_SECO_RAW` y `HUM_MOJADO_RAW` en `src/main.cpp`.
+Anotar los valores `raw` reales en seco/mojado y con luz/oscuridad. Después ajustar `LUZ_MIN_RAW`, `LUZ_MAX_RAW`, `HUM_SECO_RAW` y `HUM_MOJADO_RAW` en `src/main.cpp`. Si la bomba funciona invertida, cambiar `BOMBA_ACTIVA_HIGH` a `false`.
