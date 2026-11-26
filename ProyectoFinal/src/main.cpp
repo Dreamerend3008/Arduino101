@@ -387,7 +387,7 @@ void loop() {
   if((luz < 20 || energia < 20) && !esta_durmiendo && !esta_ejercitandose){
     esta_durmiendo = true;
   }else if(esta_durmiendo){
-    if(luz > 50 || esta_ejercitandose || pulsador || humedad > 50){
+    if(luz > 50 || esta_ejercitandose || pulsador || humedad > 50 || energia > 70){
       esta_durmiendo = false;
     }
   }
