@@ -36,6 +36,12 @@ const int   HUM_MOJADO_RAW   = 1200;
 const float ADC_VREF_MV      = 3300.0f;
 const float TEMP_OFFSET_MV   = 0.0f;  
 const float TEMP_MV_POR_C    = 10.0f;
+const float MAGNITUD_ACELEROMETRO_MIN = 0.0f; // g
+const float MAGNITUD_ACELEROMETRO_MAX = 2.0f; // g
+const float MAGNITUD_GYROSCOPIO_MIN = 0.0f; // °/s
+const float MAGNITUD_GYROSCOPIO_MAX = 200.0f; // °/s
+const float MAGNITUD_TOTAL_MIN = 0.0f; // g + °/s
+const float MAGNITUD_TOTAL_MAX = 200.0f; // g + °/s
 const bool  BOMBA_ACTIVA_HIGH = true; 
 
 // ===================== VARIABLES DE LECTURA Y ESTADO =====================
@@ -46,6 +52,12 @@ bool  pulsador = false;
 bool  pulsador_ant = false;
 float ax = 0, ay = 0, az = 0;       // Acelerómetro (g)
 float gx = 0, gy = 0, gz = 0;       // Giroscopio (°/s)
+float magnitud_acelerometro_raw = 0.0f;
+float magnitud_gyroscopio_raw = 0.0f;
+float magnitud_total_raw = 0.0f;
+float magnitud_acelerometro = 0.0f;
+float magnitud_gyroscopio = 0.0f;
+float magnitud_total = 0.0f;
 String bt_msg = "";
 
 int   leds[3] = {0, 0, 0};
@@ -63,6 +75,7 @@ bool mpu_init() {
   Wire.write(0x00); // Despertar sensor
   return Wire.endTransmission() == 0;
 }
+
 bool leer_mpu() {
   Wire.beginTransmission(DIRECCION_MPU);
   Wire.write(0x3B); // ACCEL_XOUT_H
@@ -81,6 +94,12 @@ bool leer_mpu() {
   gx = read16() / 131.0f;
   gy = read16() / 131.0f;
   gz = read16() / 131.0f;
+  magnitud_acelerometro_raw = sqrt(ax * ax + ay * ay + az * az);
+  magnitud_gyroscopio_raw = sqrt(gx * gx + gy * gy + gz * gz);
+  magnitud_total_raw = sqrt(magnitud_acelerometro_raw * magnitud_acelerometro_raw + magnitud_gyroscopio_raw * magnitud_gyroscopio_raw);
+  magnitud_acelerometro = map(magnitud_acelerometro_raw, MAGNITUD_ACELEROMETRO_MIN, MAGNITUD_ACELEROMETRO_MAX, 0, 100);
+  magnitud_gyroscopio = map(magnitud_gyroscopio_raw, MAGNITUD_GYROSCOPIO_MIN, MAGNITUD_GYROSCOPIO_MAX, 0, 100);
+  magnitud_total = map(magnitud_total_raw, MAGNITUD_TOTAL_MIN, MAGNITUD_TOTAL_MAX, 0, 100);
   return true;
 }
 
@@ -188,6 +207,9 @@ void debug(int intervalo_ms) {
     Serial.print("l_mpu ACC:["); Serial.print(ax, 2); Serial.print(","); Serial.print(ay, 2); Serial.print(","); Serial.print(az, 2);
     Serial.print("] GYR:[");     Serial.print(gx, 1); Serial.print(","); Serial.print(gy, 1); Serial.print(","); Serial.print(gz, 1);
     Serial.println("]");
+    Serial.print("l_mpu MAG ACC:"); Serial.print(magnitud_acelerometro, 2); Serial.print(" (raw "); Serial.print(magnitud_acelerometro_raw, 2); Serial.println(")");
+    Serial.print("GYR:"); Serial.print(magnitud_gyroscopio, 2); Serial.print(" (raw "); Serial.print(magnitud_gyroscopio_raw, 2); Serial.println(")");
+    Serial.print("TOTAL:"); Serial.print(magnitud_total, 2); Serial.print(" (raw "); Serial.print(magnitud_total_raw, 2); Serial.println(")");
   } else {
     Serial.println("l_mpu: ERR");
   }
@@ -250,11 +272,76 @@ void setup() {
   imprimir_ayuda();
 }
 
+/*
+Funcionamiento del tamagochi:
+
+Indicador de hidratacion
+Inicador de alimentacion
+Indicador de energia
+Indicador de Actividad fisica
+
+*/
+
+
+// Variables de estado del tamagotchi
+int hidratacion = 100; // Estimulo -> Beber agua
+int alimentacion = 100; // Estimulo -> Comer
+int energia = 100; // Estimulo -> Dormir
+int actividad_fisica = 100; // Estimulo -> Ejercicio
+
+bool esta_durmiendo = false; // Estado de sueño
+bool esta_ejercitandose = false; // Estado de ejercicio
+
+void comer(){
+  if(alimentacion < 100){
+    alimentacion += random(20,60);
+    if(alimentacion > 100) alimentacion = 100;
+    Serial.println("Comiendo... Alimentacion: " + String(alimentacion));
+  } else {
+    Serial.println("Alimentacion completa");
+  }
+}
+
+void tomar_agua(){
+  if(hidratacion < 100){
+    hidratacion += random(min(humedad, 20), max(humedad, 40));
+    if(hidratacion > 100) hidratacion = 100;
+    Serial.println("Bebiendo agua... Hidratacion: " + String(hidratacion));
+  } else {
+    Serial.println("Hidratacion completa");
+  }
+}
+
 void loop() {
   leer_entradas();
 
+  // Acciones del usuario
+
+  // Presionar el pulsador para comer
   if (pulsador && !pulsador_ant) {
-    Serial.println("EVENTO: Pulsador presionado");
+    comer();
+  }
+
+  // Si el sensor de humedad se activa significa que el tamagochi esta tomando agua
+  if(humedad > 50){
+    tomar_agua();
+  }
+
+  // Si la luz es baja o la energia es baja y el tamagochi no esta durmiendo, entonces entra en estado de sueño
+  if((luz < 20 || energia < 20) && !esta_durmiendo){
+    esta_durmiendo = true;
+  }else if(esta_durmiendo){
+    if(luz > 50 || esta_ejercitandose || pulsador || humedad > 50){
+      esta_durmiendo = false;
+    }
+  }
+
+  if(magnitud_total > 50 && !esta_ejercitandose){
+    esta_ejercitandose = true;
+  }else if(esta_ejercitandose){
+    if(magnitud_total < 20){
+      esta_ejercitandose = false;
+    }
   }
 
   procesar_comandos_serial();
